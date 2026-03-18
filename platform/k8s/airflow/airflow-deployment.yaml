@@ -47,7 +47,6 @@ spec:
               echo "Running DB migrations..."
               airflow db migrate
 
-
               if airflow users list | grep -q "$AIRFLOW_ADMIN_USERNAME"; then
                 echo "Airflow admin user '$AIRFLOW_ADMIN_USERNAME' exists."
                 echo "Resetting admin password..."
