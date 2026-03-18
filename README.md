@@ -74,3 +74,28 @@ docker push $IMAGE:$TAG
 kubectl delete job -n data-platform dl-ingestion-manual --ignore-not-found
 kubectl apply -f apps/dl-ingestion/dl-ingestion-job.yaml
 kubectl logs -n data-platform -f job/dl-ingestion-manual
+
+## dwh-loader local run
+export MINIO_ACCESS_KEY=admin
+export MINIO_SECRET_KEY=[password]
+export POSTGRES_USER=admin
+export POSTGRES_PASSWORD=[password]
+python3 app/main.py
+
+## dwh-loader push command
+export REPO_URL=$(git config --get remote.origin.url)
+export OWNER_REPO=$(echo "$REPO_URL" | sed -E 's#(git@github.com:|https://github.com/)##; s#\.git$##')
+export SOURCE_REPO=https://github.com/$OWNER_REPO
+export GHCR_OWNER=${OWNER_REPO%%/*}
+export GHCR_REPO=${OWNER_REPO##*/}
+export IMAGE=ghcr.io/$GHCR_OWNER/$GHCR_REPO/dwh-loader
+export TAG=v1
+
+docker build --build-arg SOURCE_REPO=$SOURCE_REPO -t $IMAGE:$TAG ./apps/dwh-loader
+docker push $IMAGE:$TAG
+
+## dwh-loader run in k8s
+kubectl delete job -n data-platform dwh-loader-manual --ignore-not-found
+kubectl apply -f apps/dwh-loader/dwh-loader-job.yaml
+kubectl logs -n data-platform -f job/dwh-loader-manual
+
