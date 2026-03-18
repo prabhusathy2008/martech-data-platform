@@ -7,9 +7,9 @@ This repository is structured for a local, reproducible MarTech data platform on
 - `infra`: local cluster/bootstrap configs (e.g., kind config)
 - `platform/k8s/kustomization.yaml`: single kustomize entrypoint
 - `platform/k8s/data-platform`: namespace, MinIO, and PostgreSQL manifests
-- `platform/k8s/airflow`: namespace, service account, bootstrap, deployment, and service manifests
+- `platform/k8s/airflow`: namespace, service account, deployment, and service manifests
 - `platform/k8s/airflow-data-platform-binding.yaml`: cross-namespace Role + RoleBinding for Airflow task pods
-- `platform/airflow/dags`: orchestration DAGs
+- `airflow-dags`: local DAGs folder mounted into Airflow at `/opt/airflow/dags`
 - `apps`: application modules (dl-ingestion, dwh-load, data-modeling)
 - `data/sql`: schema and seed scripts
 - `docs`: architecture notes and runbook
@@ -26,7 +26,7 @@ From repository root:
 	```bash
 	cp platform/k8s/data-platform/minio/minio-secret.env.example platform/k8s/data-platform/minio/minio-secret.env
 	cp platform/k8s/data-platform/postgres/postgres-secret.env.example platform/k8s/data-platform/postgres/postgres-secret.env
-	cp platform/k8s/airflow/airflow-bootstrap.env.example platform/k8s/airflow/airflow-bootstrap.env
+	cp platform/k8s/airflow/airflow-secret.env.example platform/k8s/airflow/airflow-secret.env
 	# Then edit each file and set your own values
 	```
 
