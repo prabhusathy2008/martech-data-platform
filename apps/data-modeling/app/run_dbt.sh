@@ -18,7 +18,7 @@ DBT_VARS=$(printf '{
   "${DBT_HIGH_INTENT_SCORE_THRESHOLD:-10}" \
   "${DBT_HIGH_INTENT_MEANINGFUL_THRESHOLD:-5}" \
   "${DBT_NEWLY_ENGAGED_WINDOW_DAYS:-14}" \
-  "${DBT_INCREMENTAL_BACKFILL_DAYS:-2}"
+  "${DBT_INCREMENTAL_BACKFILL_DAYS:-1}"
 )
 
 run_dbt() {
@@ -33,6 +33,3 @@ run_dbt debug --vars "${DBT_VARS}"
 run_dbt seed --vars "${DBT_VARS}"
 run_dbt build --vars "${DBT_VARS}"
 echo "data-modeling finished successfully"
-
-#run_dbt build --select tag:intermediate --vars "${DBT_VARS}"
-#run_dbt run --select dim_event_types --vars "${DBT_VARS}"

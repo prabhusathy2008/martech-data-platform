@@ -4,7 +4,7 @@ models:
   - name: int_events_enriched
     description: >
       Enriched event data with business attributes.
-      Adds temporal binning (event_date, event_hour), meaningful action flag,
+      Adds temporal binning (event_date), meaningful action flag,
       and action weight scoring for engagement analytics.
     columns:
       - name: event_id
@@ -15,96 +15,25 @@ models:
         description: Calendar date of the event.
         tests:
           - not_null
-      - name: event_hour
-        description: Hour-level truncation for time-series aggregation.
-        tests:
-          - not_null
       - name: user_id
         description: GitHub user ID.
       - name: user_login
         description: GitHub username.
+      - name: repo_id
+        description: GitHub repository ID.
       - name: repo_source
         description: GitHub repository full name.
       - name: event_type
         description: GitHub event type (PUSHEVENT, PULLREQUESTEVENT, etc.).
       - name: payload
         description: Full event payload as JSONB.
+      - name: loaded_at
+        description: Warehouse load timestamp propagated from staging, used for incremental backfill filtering.
       - name: is_meaningful_action
         description: True if event_type is engagement-relevant (code, PR, issue, etc.).
         tests:
           - not_null
       - name: action_weight
         description: Numeric engagement weight (PushEvent=3, PREvent=5, issues=2, etc.).
-        tests:
-          - not_null
-
-  - name: int_user_daily_activity
-    description: Daily per-user engagement metrics.
-    columns:
-      - name: user_id
-        description: GitHub user ID.
-      - name: event_date
-        description: Date of the events.
-      - name: user_login
-        description: GitHub username.
-        tests:
-          - not_null
-      - name: events_count
-        description: Total events for the user on that day.
-        tests:
-          - not_null
-      - name: meaningful_actions_count
-        description: Count of meaningful engagement actions.
-        tests:
-          - not_null
-      - name: weighted_score
-        description: Sum of action weights for the user's events that day.
-        tests:
-          - not_null
-
-  - name: int_user_first_engagement
-    description: First and last engagement timestamps per user.
-    columns:
-      - name: user_id
-        tests:
-          - not_null
-          - unique
-      - name: user_login
-        tests:
-          - not_null
-      - name: first_event_ts
-        description: Timestamp of the user's first event.
-        tests:
-          - not_null
-      - name: last_event_ts
-        description: Timestamp of the user's most recent event.
-        tests:
-          - not_null
-      - name: first_meaningful_event_ts
-        description: Timestamp of the user's first meaningful engagement event.
-      - name: last_meaningful_event_ts
-        description: Timestamp of the user's most recent meaningful engagement event.
-
-  - name: int_user_recent_activity_window
-    description: Rolling N-day engagement features per user.
-    columns:
-      - name: user_id
-        description: GitHub user ID.
-      - name: user_login
-        description: GitHub username.
-        tests:
-          - not_null
-      - name: events_last_n_days
-        description: Count of events in the recent N-day window.
-        tests:
-          - not_null
-      - name: meaningful_actions_last_n_days
-        description: Count of meaningful actions in the recent N-day window.
-      - name: score_last_n_days
-        description: Sum of action weights in the recent N-day window.
-        tests:
-          - not_null
-      - name: last_event_ts
-        description: Timestamp of the most recent event in the recent N-day window.
         tests:
           - not_null

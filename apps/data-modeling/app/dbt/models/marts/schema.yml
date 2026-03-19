@@ -2,109 +2,160 @@ version: 2
 
 models:
   - name: dim_users
-    description: User dimension for analytical and audience joins.
+    description: User dimension with engagement lifecycle timestamps.
     columns:
       - name: user_id
+        description: GitHub user ID.
         tests:
           - not_null
           - unique
       - name: user_login
+        description: Canonical GitHub username.
         tests:
           - not_null
       - name: first_event_ts
-        description: Timestamp of the user's first engagement event.
+        description: Timestamp of the user's first recorded event.
         tests:
           - not_null
       - name: last_event_ts
-        description: Timestamp of the user's most recent engagement event.
+        description: Timestamp of the user's most recent recorded event.
         tests:
           - not_null
       - name: first_meaningful_event_ts
         description: Timestamp of the user's first meaningful engagement event.
-        tests:
-          - not_null
       - name: last_meaningful_event_ts
         description: Timestamp of the user's most recent meaningful engagement event.
-        tests:
-          - not_null
 
   - name: dim_repos
-    description: Distinct repository dimension.
+    description: Repository dimension sourced from enriched staged events.
     columns:
-      - name: repo_source
+      - name: repo_id
+        description: GitHub repository ID.
         tests:
           - not_null
           - unique
+      - name: repo_source
+        description: GitHub repository full name.
+        tests:
+          - not_null
 
   - name: dim_event_types
-    description: Event type dimension with default business weighting.
+    description: Event type dimension with business meaning and scoring weight.
     columns:
       - name: event_type
+        description: GitHub event type.
         tests:
           - not_null
           - unique
       - name: is_meaningful_action
-        description: True if event_type is engagement-relevant (code, PR, issue, etc.).
+        description: Whether the event type is considered engagement-relevant.
         tests:
           - not_null
       - name: action_weight
-        description: Numeric engagement weight (PushEvent=3, PREvent=5, issues=2, etc.).
+        description: Default engagement weight for the event type.
         tests:
           - not_null
-      
-  - name: fct_events
-    description: Incremental event-level fact table from staged raw events.
+
+  - name: fct_user_repo_engagement
+    description: Daily aggregated fact at user, repository, and event type grain.
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "(cast(event_date as text) || '|' || cast(user_id as text) || '|' || cast(repo_id as text) || '|' || coalesce(event_type, ''))"
     columns:
-      - name: event_id
+      - name: event_date
+        description: Calendar date of the activity.
         tests:
           - not_null
-          - unique
       - name: user_id
+        description: GitHub user ID.
         tests:
           - not_null
           - relationships:
               arguments:
                 to: ref('dim_users')
                 field: user_id
-      - name: repo_source
+      - name: repo_id
+        description: GitHub repository ID.
         tests:
+          - not_null
           - relationships:
               arguments:
                 to: ref('dim_repos')
-                field: repo_source
+                field: repo_id
       - name: event_type
+        description: GitHub event type.
         tests:
+          - not_null
           - relationships:
               arguments:
                 to: ref('dim_event_types')
                 field: event_type
-
-  - name: fct_user_daily_engagement
-    description: Daily engagement fact at user-day grain.
-    columns:
-      - name: event_date
+      - name: events_count
+        description: Total number of events for the grain.
         tests:
           - not_null
-      - name: user_id
+      - name: meaningful_events_count
+        description: Count of meaningful actions for the grain.
         tests:
           - not_null
+      - name: engagement_score
+        description: Sum of business weights for the aggregated events.
+        tests:
+          - not_null
+      - name: transformed_at
+        description: Timestamp when the fact record was last transformed.
 
   - name: aud_high_intent_users
-    description: Audience of users with high recent activity using score/meaningful-action thresholds.
+    description: Audience of users with high recent engagement activity in the configured rolling window.
     columns:
       - name: user_id
+        description: GitHub user ID in the high-intent segment.
         tests:
           - not_null
+          - unique
       - name: user_login
+        description: Canonical GitHub username for the audience member.
+      - name: events_last_n_days
+        description: Total events in the configured audience window.
         tests:
           - not_null
+      - name: meaningful_actions_last_n_days
+        description: Count of meaningful events in the configured audience window.
+        tests:
+          - not_null
+      - name: score_last_n_days
+        description: Weighted engagement score in the configured audience window.
+        tests:
+          - not_null
+      - name: audience_generated_at
+        description: Timestamp when the audience record was generated.
 
   - name: aud_newly_engaged_users
-    description: Audience of users whose first engagement occurred in the configured recent window.
+    description: Audience of users whose first engagement happened within the configured recent window.
     columns:
       - name: user_id
+        description: GitHub user ID in the newly-engaged segment.
         tests:
           - not_null
+          - unique
       - name: user_login
+        description: Canonical GitHub username for the audience member.
+        tests:
+          - not_null
+      - name: first_event_ts
+        description: User's first observed event timestamp.
+        tests:
+          - not_null
+      - name: first_meaningful_event_ts
+        description: User's first observed meaningful event timestampe.
+        tests:
+          - not_null
+      - name: last_event_ts
+        description: User's latest observed event timestamp.
+        tests:
+          - not_null
+      - name: audience_generated_at
+        description: Timestamp when the audience record was generated.
         tests:
           - not_null

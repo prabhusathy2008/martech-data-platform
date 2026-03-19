@@ -2,7 +2,7 @@ version: 2
 
 models:
   - name: stg_raw_events
-    description: Light cleaning of raw.raw_events.
+    description: Incremental canonical staging table for raw.raw_events with light cleaning and deduplication.
     columns:
       - name: event_id
         description: Unique GitHub event ID.
@@ -15,10 +15,20 @@ models:
           - not_null
       - name: user_id
         description: GitHub user ID (integer).
+        tests:
+          - not_null
       - name: user_login
         description: GitHub username, lowercased.
+        tests:
+          - not_null
+      - name: repo_id
+        description: GitHub repository ID extracted from the event payload.
+        tests:
+          - not_null
       - name: repo_source
         description: GitHub repository full name, lowercased.
+        tests:
+          - not_null
       - name: event_type
         description: GitHub event type, uppercased (e.g. PUSHEVENT).
         tests:
@@ -39,8 +49,19 @@ models:
                   - MEMBEREVENT
                   - COMMITCOMMENTEVENT
                   - PUBLICEVENT
-                quote: false
+                  - PULLREQUESTREVIEWEVENT
+                quote: true
       - name: payload
         description: Full event payload as JSONB.
+        tests:
+          - not_null
+      - name: ingested_file
+        description: Data lake object or file path from which the event was loaded.
+        tests:
+          - not_null
+      - name: loaded_at
+        description: Warehouse load timestamp used for incremental backfill processing.
+        tests:
+          - not_null
 
 

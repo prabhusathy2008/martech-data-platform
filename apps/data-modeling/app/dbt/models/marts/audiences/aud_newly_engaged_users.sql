@@ -4,31 +4,19 @@
 
 with suppressed as (
     select
-        cast(user_id as text) as user_id,
-        lower(user_login) as user_login
+        cast(user_id as int) as user_id
     from {{ ref('seed_suppressed_users') }}
-),
-base as (
-    select
-        f.user_id,
-        lower(f.user_login) as user_login,
-        f.first_event_ts,
-        f.first_meaningful_event_ts,
-        f.last_event_ts
-    from {{ ref('int_user_first_engagement') }} f
 )
 select
-    b.user_id,
-    b.user_login,
-    b.first_event_ts,
-    b.first_meaningful_event_ts,
-    b.last_event_ts,
+    du.user_id,
+    du.user_login,
+    du.first_event_ts,
+    du.first_meaningful_event_ts,
+    du.last_event_ts,
     current_timestamp as audience_generated_at
-from base b
+from {{ ref('dim_users') }} du
 left join suppressed s
-    on s.user_id = b.user_id
-    or s.user_login = b.user_login
+    on s.user_id = du.user_id
 where s.user_id is null
-  and s.user_login is null
-  and coalesce(b.first_meaningful_event_ts, b.first_event_ts)
+  and du.first_event_ts
       >= (current_timestamp - interval '{{ new_user_window_days }} day')
