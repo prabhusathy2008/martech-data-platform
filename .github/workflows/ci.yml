@@ -235,7 +235,7 @@ jobs:
 
   publish-images:
     name: Publish images to GHCR
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || true
+    #if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
