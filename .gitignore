@@ -39,6 +39,8 @@ htmlcov/
 MarTech_Data_Engineering_Tech_Lead_Assignment.md
 .DS_Store
 **.env
-
+logs/
+target/
+.user.yml
 
 ci.yml

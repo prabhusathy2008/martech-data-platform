@@ -99,3 +99,28 @@ kubectl delete job -n data-platform dwh-loader-manual --ignore-not-found
 kubectl apply -f apps/dwh-loader/dwh-loader-job.yaml
 kubectl logs -n data-platform -f job/dwh-loader-manual
 
+## data-modeling local run
+python3.11 -m venv .venv
+source .venv/bin/activate
+
+export POSTGRES_USER=admin
+export POSTGRES_PASSWORD=[password]
+./run_dbt.sh
+
+## dwh-loader push command
+export REPO_URL=$(git config --get remote.origin.url)
+export OWNER_REPO=$(echo "$REPO_URL" | sed -E 's#(git@github.com:|https://github.com/)##; s#\.git$##')
+export SOURCE_REPO=https://github.com/$OWNER_REPO
+export GHCR_OWNER=${OWNER_REPO%%/*}
+export GHCR_REPO=${OWNER_REPO##*/}
+export IMAGE=ghcr.io/$GHCR_OWNER/$GHCR_REPO/data-modeling
+export TAG=v1
+
+docker build --build-arg SOURCE_REPO=$SOURCE_REPO -t $IMAGE:$TAG ./apps/data-modeling
+docker push $IMAGE:$TAG
+
+## data-modeling run in k8s
+kubectl delete job -n data-platform data-modeling-manual --ignore-not-found
+kubectl apply -f apps/data-modeling/data-modeling-job.yaml
+kubectl logs -n data-platform -f job/data-modeling-manual
+

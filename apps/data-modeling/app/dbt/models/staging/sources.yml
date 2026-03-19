@@ -1,0 +1,23 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    description: Raw events loaded by dwh-loader from data lake.
+    freshness:
+      warn_after: {count: 2, period: day}
+      error_after: {count: 7, period: day}
+    loaded_at_field: loaded_at
+    tables:
+      - name: raw_events
+        description: Raw GitHub Events.
+        columns:
+          - name: event_id
+            description: Unique GitHub event ID (primary key).
+            tests:
+              - not_null
+              - unique
+          - name: payload
+            description: Full event payload as JSONB.
+            tests:
+              - not_null

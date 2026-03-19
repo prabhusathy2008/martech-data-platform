@@ -1,0 +1,46 @@
+version: 2
+
+models:
+  - name: stg_raw_events
+    description: Light cleaning of raw.raw_events.
+    columns:
+      - name: event_id
+        description: Unique GitHub event ID.
+        tests:
+          - not_null
+          - unique
+      - name: event_ts
+        description: Datetime the event occurred (Timestamp).
+        tests:
+          - not_null
+      - name: user_id
+        description: GitHub user ID (integer).
+      - name: user_login
+        description: GitHub username, lowercased.
+      - name: repo_source
+        description: GitHub repository full name, lowercased.
+      - name: event_type
+        description: GitHub event type, uppercased (e.g. PUSHEVENT).
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - PUSHEVENT
+                  - PULLREQUESTEVENT
+                  - ISSUESEVENT
+                  - ISSUECOMMENTEVENT
+                  - PULLREQUESTREVIEWCOMMENTEVENT
+                  - CREATEEVENT
+                  - WATCHEVENT
+                  - FORKEVENT
+                  - DELETEEVENT
+                  - RELEASEEVENT
+                  - MEMBEREVENT
+                  - COMMITCOMMENTEVENT
+                  - PUBLICEVENT
+                quote: false
+      - name: payload
+        description: Full event payload as JSONB.
+
+

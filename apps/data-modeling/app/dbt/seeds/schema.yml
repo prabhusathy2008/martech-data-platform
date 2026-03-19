@@ -1,0 +1,11 @@
+version: 2
+
+seeds:
+  - name: seed_suppressed_users
+    description: Suppression list used to exclude users from audience outputs.
+    columns:
+      - name: user_id
+        tests:
+          - not_null
+      - name: user_login
+      - name: reason

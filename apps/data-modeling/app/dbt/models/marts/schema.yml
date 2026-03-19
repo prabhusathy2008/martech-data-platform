@@ -1,0 +1,110 @@
+version: 2
+
+models:
+  - name: dim_users
+    description: User dimension for analytical and audience joins.
+    columns:
+      - name: user_id
+        tests:
+          - not_null
+          - unique
+      - name: user_login
+        tests:
+          - not_null
+      - name: first_event_ts
+        description: Timestamp of the user's first engagement event.
+        tests:
+          - not_null
+      - name: last_event_ts
+        description: Timestamp of the user's most recent engagement event.
+        tests:
+          - not_null
+      - name: first_meaningful_event_ts
+        description: Timestamp of the user's first meaningful engagement event.
+        tests:
+          - not_null
+      - name: last_meaningful_event_ts
+        description: Timestamp of the user's most recent meaningful engagement event.
+        tests:
+          - not_null
+
+  - name: dim_repos
+    description: Distinct repository dimension.
+    columns:
+      - name: repo_source
+        tests:
+          - not_null
+          - unique
+
+  - name: dim_event_types
+    description: Event type dimension with default business weighting.
+    columns:
+      - name: event_type
+        tests:
+          - not_null
+          - unique
+      - name: is_meaningful_action
+        description: True if event_type is engagement-relevant (code, PR, issue, etc.).
+        tests:
+          - not_null
+      - name: action_weight
+        description: Numeric engagement weight (PushEvent=3, PREvent=5, issues=2, etc.).
+        tests:
+          - not_null
+      
+  - name: fct_events
+    description: Incremental event-level fact table from staged raw events.
+    columns:
+      - name: event_id
+        tests:
+          - not_null
+          - unique
+      - name: user_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_users')
+                field: user_id
+      - name: repo_source
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_repos')
+                field: repo_source
+      - name: event_type
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_event_types')
+                field: event_type
+
+  - name: fct_user_daily_engagement
+    description: Daily engagement fact at user-day grain.
+    columns:
+      - name: event_date
+        tests:
+          - not_null
+      - name: user_id
+        tests:
+          - not_null
+
+  - name: aud_high_intent_users
+    description: Audience of users with high recent activity using score/meaningful-action thresholds.
+    columns:
+      - name: user_id
+        tests:
+          - not_null
+      - name: user_login
+        tests:
+          - not_null
+
+  - name: aud_newly_engaged_users
+    description: Audience of users whose first engagement occurred in the configured recent window.
+    columns:
+      - name: user_id
+        tests:
+          - not_null
+      - name: user_login
+        tests:
+          - not_null
