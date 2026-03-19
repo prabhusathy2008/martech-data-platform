@@ -9,7 +9,7 @@ with DAG(
     dag_id="dl-ingestion",
     description="Ingest GitHub events into MinIO raw bucket (data lake)",
     start_date=pendulum.datetime(2026, 1, 1, tz="UTC"),
-    #schedule="@hourly",
+    # schedule="@hourly",
     schedule=None,
     catchup=False,
     max_active_runs=1,
@@ -36,14 +36,18 @@ with DAG(
             k8s.V1EnvVar(
                 name="MINIO_ACCESS_KEY",
                 value_from=k8s.V1EnvVarSource(
-                    secret_key_ref=k8s.V1SecretKeySelector(name="minio-secret", key="MINIO_ROOT_USER")
+                    secret_key_ref=k8s.V1SecretKeySelector(
+                        name="minio-secret", key="MINIO_ROOT_USER"
+                    )
                 ),
             ),
             k8s.V1EnvVar(
                 name="MINIO_SECRET_KEY",
                 value_from=k8s.V1EnvVarSource(
-                    secret_key_ref=k8s.V1SecretKeySelector(name="minio-secret", key="MINIO_ROOT_PASSWORD")
+                    secret_key_ref=k8s.V1SecretKeySelector(
+                        name="minio-secret", key="MINIO_ROOT_PASSWORD"
+                    )
                 ),
-            )
-        ]
+            ),
+        ],
     )

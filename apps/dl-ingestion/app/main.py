@@ -16,12 +16,14 @@ from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
 
+
 def configure_logging() -> None:
     logging.basicConfig(
         level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
         force=True,
     )
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -35,6 +37,7 @@ class Settings:
     minio_access_key: str
     minio_secret_key: str
     github_request_timeout_seconds: int
+
 
 def load_settings() -> Settings:
     org = os.getenv("GITHUB_ORG", "adevinta")
@@ -53,12 +56,17 @@ def load_settings() -> Settings:
         raw_bucket=os.getenv("RAW_BUCKET", "dl-raw-events"),
         raw_prefix=os.getenv("RAW_PREFIX", "source=github"),
         operational_bucket=os.getenv("OPERATIONAL_BUCKET", "ops-pipelines"),
-        checkpoint_key=os.getenv("CHECKPOINT_KEY", f"dl-ingestion/events/github/{org}/checkpoint.json"),
+        checkpoint_key=os.getenv(
+            "CHECKPOINT_KEY", f"dl-ingestion/events/github/{org}/checkpoint.json"
+        ),
         minio_endpoint=os.getenv("MINIO_ENDPOINT", default_minio_endpoint),
         minio_access_key=os.getenv("MINIO_ACCESS_KEY"),
         minio_secret_key=os.getenv("MINIO_SECRET_KEY"),
-        github_request_timeout_seconds=int(os.getenv("GITHUB_REQUEST_TIMEOUT_SECONDS", "30")),
+        github_request_timeout_seconds=int(
+            os.getenv("GITHUB_REQUEST_TIMEOUT_SECONDS", "30")
+        ),
     )
+
 
 def build_s3_client(settings: Settings) -> BaseClient:
     return boto3.client(
@@ -69,6 +77,7 @@ def build_s3_client(settings: Settings) -> BaseClient:
         config=Config(signature_version="s3v4"),
         region_name="us-east-1",
     )
+
 
 def load_checkpoint(s3: BaseClient, settings: Settings) -> str | None:
     """Return last processed event ID from the operational bucket, or None."""
@@ -86,6 +95,7 @@ def load_checkpoint(s3: BaseClient, settings: Settings) -> str | None:
             return None
         raise
 
+
 def save_checkpoint(s3: BaseClient, settings: Settings, last_id: str) -> None:
     """Persist the latest processed event ID to the operational bucket."""
     checkpoint: dict[str, Any] = {
@@ -98,6 +108,7 @@ def save_checkpoint(s3: BaseClient, settings: Settings, last_id: str) -> None:
         Body=json.dumps(checkpoint).encode("utf-8"),
         ContentType="application/json",
     )
+
 
 def write_events_to_raw(
     s3: BaseClient,
@@ -120,7 +131,9 @@ def write_events_to_raw(
         f"year={year}/month={month}/day={day}/hour={hour}/"
         f"events-latest-{latest_id}-oldest-{oldest_id}.ndjson"
     )
-    body = "\n".join(json.dumps(event, separators=(",", ":")) for event in events) + "\n"
+    body = (
+        "\n".join(json.dumps(event, separators=(",", ":")) for event in events) + "\n"
+    )
     s3.put_object(
         Bucket=settings.raw_bucket,
         Key=object_key,
@@ -128,6 +141,7 @@ def write_events_to_raw(
         ContentType="application/x-ndjson",
     )
     return object_key
+
 
 def _build_retrying_session() -> requests.Session:
     retry = Retry(
@@ -147,6 +161,7 @@ def _build_retrying_session() -> requests.Session:
     session.mount("http://", adapter)
     return session
 
+
 def _build_headers(settings: Settings) -> dict[str, str]:
     headers = {
         "Accept": "application/vnd.github.v3+json",
@@ -157,6 +172,7 @@ def _build_headers(settings: Settings) -> dict[str, str]:
         headers["Authorization"] = f"Bearer {settings.github_token}"
     return headers
 
+
 def _next_page_url(link_header: str) -> str | None:
     """Parse GitHub's Link header and return the 'next' URL if present."""
     for part in link_header.split(","):
@@ -164,6 +180,7 @@ def _next_page_url(link_header: str) -> str | None:
         if len(segments) == 2 and segments[1].strip() == 'rel="next"':
             return segments[0].strip().strip("<>")
     return None
+
 
 def _poll_interval_seconds(response: requests.Response) -> int | None:
     """Return GitHub's suggested poll interval in seconds, if present and valid."""
@@ -176,6 +193,7 @@ def _poll_interval_seconds(response: requests.Response) -> int | None:
         logger.warning("dl-ingestion.invalid_poll_interval", extra={"value": value})
         return None
     return interval
+
 
 def fetch_new_events(
     settings: Settings,
@@ -207,7 +225,10 @@ def fetch_new_events(
                 timeout=settings.github_request_timeout_seconds,
             )
 
-            if response.status_code == 403 and response.headers.get("X-RateLimit-Remaining") == "0":
+            if (
+                response.status_code == 403
+                and response.headers.get("X-RateLimit-Remaining") == "0"
+            ):
                 reset_epoch = int(response.headers.get("X-RateLimit-Reset", "0"))
                 sleep_seconds = max(reset_epoch - int(time.time()), 0)
                 raise RuntimeError(
@@ -249,6 +270,7 @@ def fetch_new_events(
 
     return collected
 
+
 def run() -> None:
     configure_logging()
     settings = load_settings()
@@ -267,7 +289,10 @@ def run() -> None:
     last_processed_id = load_checkpoint(s3, settings)
 
     if last_processed_id:
-        logger.info("dl-ingestion.checkpoint_found", extra={"last_processed_id": last_processed_id})
+        logger.info(
+            "dl-ingestion.checkpoint_found",
+            extra={"last_processed_id": last_processed_id},
+        )
     else:
         logger.info("dl-ingestion.checkpoint_missing")
 
@@ -290,7 +315,10 @@ def run() -> None:
     # Events are newest-first; index 0 holds the most recent ID.
     latest_id: str = events[0]["id"]
     save_checkpoint(s3, settings, latest_id)
-    logger.info("dl-ingestion.checkpoint_updated", extra={"last_processed_id": latest_id})
+    logger.info(
+        "dl-ingestion.checkpoint_updated", extra={"last_processed_id": latest_id}
+    )
+
 
 if __name__ == "__main__":
     run()

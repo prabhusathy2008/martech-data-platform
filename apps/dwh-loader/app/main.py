@@ -17,12 +17,14 @@ from psycopg.types.json import Jsonb
 
 logger = logging.getLogger(__name__)
 
+
 def configure_logging() -> None:
     logging.basicConfig(
         level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
         force=True,
     )
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -40,6 +42,7 @@ class Settings:
     postgres_password: str
     postgres_db: str
 
+
 def load_settings() -> Settings:
     org = os.getenv("GITHUB_ORG", "adevinta")
 
@@ -50,14 +53,18 @@ def load_settings() -> Settings:
         if os.getenv("KUBERNETES_SERVICE_HOST")
         else "http://localhost:9000"
     )
-    default_postgres_host = "postgres" if os.getenv("KUBERNETES_SERVICE_HOST") else "localhost"
+    default_postgres_host = (
+        "postgres" if os.getenv("KUBERNETES_SERVICE_HOST") else "localhost"
+    )
 
     return Settings(
         github_org=org,
         raw_bucket=os.getenv("RAW_BUCKET", "dl-raw-events"),
         raw_prefix=os.getenv("RAW_PREFIX", f"source=github/org={org}"),
         operational_bucket=os.getenv("OPERATIONAL_BUCKET", "ops-pipelines"),
-        checkpoint_key=os.getenv("CHECKPOINT_KEY", f"dwh-loader/events/github/{org}/checkpoint.json"),
+        checkpoint_key=os.getenv(
+            "CHECKPOINT_KEY", f"dwh-loader/events/github/{org}/checkpoint.json"
+        ),
         minio_endpoint=os.getenv("MINIO_ENDPOINT", default_minio_endpoint),
         minio_access_key=os.getenv("MINIO_ACCESS_KEY"),
         minio_secret_key=os.getenv("MINIO_SECRET_KEY"),
@@ -67,6 +74,7 @@ def load_settings() -> Settings:
         postgres_user=os.getenv("POSTGRES_USER"),
         postgres_password=os.getenv("POSTGRES_PASSWORD"),
     )
+
 
 def build_s3_client(settings: Settings) -> BaseClient:
     return boto3.client(
@@ -78,9 +86,12 @@ def build_s3_client(settings: Settings) -> BaseClient:
         region_name="us-east-1",
     )
 
+
 def load_checkpoint(s3: BaseClient, settings: Settings) -> set[str]:
     try:
-        response = s3.get_object(Bucket=settings.operational_bucket, Key=settings.checkpoint_key)
+        response = s3.get_object(
+            Bucket=settings.operational_bucket, Key=settings.checkpoint_key
+        )
         payload = json.loads(response["Body"].read())
         files = payload.get("processed_files", [])
         return set(files)
@@ -90,7 +101,10 @@ def load_checkpoint(s3: BaseClient, settings: Settings) -> set[str]:
             return set()
         raise
 
-def save_checkpoint(s3: BaseClient, settings: Settings, processed_files: set[str]) -> None:
+
+def save_checkpoint(
+    s3: BaseClient, settings: Settings, processed_files: set[str]
+) -> None:
     payload = {
         "processed_files": sorted(processed_files),
         "updated_at": datetime.now(UTC).isoformat(),
@@ -102,11 +116,14 @@ def save_checkpoint(s3: BaseClient, settings: Settings, processed_files: set[str
         ContentType="application/json",
     )
 
+
 def list_raw_objects(s3: BaseClient, settings: Settings) -> list[str]:
     keys: list[str] = []
     paginator = s3.get_paginator("list_objects_v2")
 
-    for page in paginator.paginate(Bucket=settings.raw_bucket, Prefix=settings.raw_prefix):
+    for page in paginator.paginate(
+        Bucket=settings.raw_bucket, Prefix=settings.raw_prefix
+    ):
         for obj in page.get("Contents", []):
             key = obj["Key"]
             if key.endswith(".ndjson"):
@@ -114,14 +131,17 @@ def list_raw_objects(s3: BaseClient, settings: Settings) -> list[str]:
 
     return sorted(keys)
 
+
 def _ddl_sql() -> str:
     ddl_path = Path(__file__).resolve().parent / "sql" / "raw_raw_events.sql"
     return ddl_path.read_text(encoding="utf-8")
+
 
 def ensure_raw_table(conn: psycopg.Connection) -> None:
     with conn.cursor() as cursor:
         cursor.execute(_ddl_sql())
     conn.commit()
+
 
 def upsert_events(
     conn: psycopg.Connection,
@@ -178,7 +198,10 @@ def upsert_events(
     conn.commit()
     return inserted
 
-def load_one_object(s3: BaseClient, settings: Settings, key: str) -> list[dict[str, Any]]:
+
+def load_one_object(
+    s3: BaseClient, settings: Settings, key: str
+) -> list[dict[str, Any]]:
     response = s3.get_object(Bucket=settings.raw_bucket, Key=key)
     content = response["Body"].read().decode("utf-8")
 
@@ -190,10 +213,13 @@ def load_one_object(s3: BaseClient, settings: Settings, key: str) -> list[dict[s
 
         payload = json.loads(line)
         if not isinstance(payload, dict):
-            raise ValueError(f"Invalid NDJSON object in {key} at line {line_number}: expected JSON object")
+            raise ValueError(
+                f"Invalid NDJSON object in {key} at line {line_number}: expected JSON object"
+            )
         events.append(payload)
 
     return events
+
 
 def get_pg_connection(settings: Settings) -> psycopg.Connection:
     return psycopg.connect(
@@ -203,6 +229,7 @@ def get_pg_connection(settings: Settings) -> psycopg.Connection:
         user=settings.postgres_user,
         password=settings.postgres_password,
     )
+
 
 def run() -> None:
     configure_logging()
@@ -235,7 +262,7 @@ def run() -> None:
     if not new_files:
         logger.info("dwh-loader.no_new_files")
         return
-    
+
     conn = get_pg_connection(settings)
 
     try:
@@ -250,9 +277,7 @@ def run() -> None:
             save_checkpoint(s3, settings, processed_files)
             logger.info(
                 f"dwh-loader.file_loaded. event_count={loaded}",
-                extra={
-                    "file": key
-                },
+                extra={"file": key},
             )
 
         logger.info(
@@ -264,6 +289,7 @@ def run() -> None:
         )
     finally:
         conn.close()
+
 
 if __name__ == "__main__":
     run()
