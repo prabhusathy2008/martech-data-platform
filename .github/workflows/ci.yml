@@ -1,0 +1,271 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  python-quality:
+    name: Python quality checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install CI tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Install app dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r requirements_file; do
+            echo "Installing dependencies from ${requirements_file}"
+            pip install -r "${requirements_file}"
+          done < <(find apps -type f -name 'requirements.txt' | sort)
+
+      - name: Run Ruff lint and format checks
+        run: |
+          ruff check . --exclude .venv
+          ruff format --check . --exclude .venv
+
+      - name: Verify Python modules compile
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r app_dir; do
+            if [ -d "${app_dir}/app" ]; then
+              echo "Compiling ${app_dir}/app"
+              python -m compileall "${app_dir}/app"
+            fi
+          done < <(find apps -mindepth 1 -maxdepth 1 -type d | sort)
+
+  validate-kubernetes:
+    name: Validate Kubernetes manifests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up kustomize
+        uses: imranismail/setup-kustomize@v2
+        with:
+          kustomize-version: 5.4.2
+
+      - name: Install kubeconform
+        shell: bash
+        run: |
+          set -euo pipefail
+          KUBECONFORM_VERSION="0.6.7"
+          curl -sSL "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+            | tar -xz kubeconform
+          sudo mv kubeconform /usr/local/bin/kubeconform
+
+      - name: Validate platform manifests
+        run: |
+          kustomize build platform/k8s \
+            | kubeconform -strict -summary -ignore-missing-schemas
+
+      - name: Validate app manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest_files=$(find apps -type f \( -name '*.yaml' -o -name '*.yml' \) | sort)
+          if [ -z "${manifest_files}" ]; then
+            echo "No app manifests found under apps/."
+            exit 0
+          fi
+          printf '%s\n' "${manifest_files}" | xargs cat \
+            | kubeconform -strict -summary -ignore-missing-schemas
+
+  build-images:
+    name: Build container images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install Trivy
+        shell: bash
+        run: |
+          set -euo pipefail
+          TRIVY_VERSION="0.58.2"
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b /usr/local/bin "v${TRIVY_VERSION}"
+          trivy --version
+
+      - name: Build and scan all app images
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_REPO="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+          while IFS= read -r dockerfile; do
+            app_dir=$(dirname "${dockerfile}")
+            app_name=$(basename "${app_dir}")
+            image_ref="local/${app_name}:ci"
+            echo "Building ${image_ref} from ${dockerfile}"
+            docker build \
+              --build-arg SOURCE_REPO="${SOURCE_REPO}" \
+              -t "${image_ref}" \
+              "${app_dir}"
+            echo "Scanning ${image_ref} for vulnerabilities"
+            trivy image \
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --exit-code 1 \
+              --no-progress \
+              "${image_ref}"
+          done < <(find apps -type f -name 'Dockerfile' | sort)
+
+  dbt-checks:
+    name: dbt checks
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15.8
+        env:
+          POSTGRES_USER: dbt
+          POSTGRES_PASSWORD: dbt
+          POSTGRES_DB: martech
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dbt -d martech"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DBT_HOST: 127.0.0.1
+      DBT_PORT: "5432"
+      DBT_USER: dbt
+      DBT_PASSWORD: dbt
+      DBT_DATABASE: martech
+      DBT_SCHEMA: analytics
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dbt dependencies from requirements.txt
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          REQUIREMENTS_FILE="apps/data-modeling/requirements.txt"
+          if [ ! -f "${REQUIREMENTS_FILE}" ]; then
+            echo "Missing ${REQUIREMENTS_FILE}"
+            exit 1
+          fi
+
+          echo "Installing dbt dependencies from ${REQUIREMENTS_FILE}"
+          pip install -r "${REQUIREMENTS_FILE}"
+
+      - name: Create CI dbt profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          DBT_PROJECT_FILE="apps/data-modeling/app/dbt/dbt_project.yml"
+          if [ ! -f "${DBT_PROJECT_FILE}" ]; then
+            echo "Missing ${DBT_PROJECT_FILE}"
+            exit 1
+          fi
+          profile_name="github_engagement_analytics"
+
+          mkdir -p "$RUNNER_TEMP/dbt-profile"
+          cat > "$RUNNER_TEMP/dbt-profile/profiles.yml" <<EOF
+${profile_name}:
+  target: ci
+  outputs:
+    ci:
+      type: postgres
+      host: ${DBT_HOST}
+      port: ${DBT_PORT}
+      user: ${DBT_USER}
+      password: ${DBT_PASSWORD}
+      dbname: ${DBT_DATABASE}
+      schema: ${DBT_SCHEMA}
+      threads: 4
+EOF
+
+      - name: Run dbt commands
+        working-directory: apps/data-modeling/app/dbt
+        env:
+          DBT_PROFILES_DIR: ${{ runner.temp }}/dbt-profile
+        run: |
+          dbt deps
+          dbt compile
+          dbt seed
+          dbt run
+          dbt test
+          dbt docs generate
+
+  publish-images:
+    name: Publish images to GHCR
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || true)
+    runs-on: ubuntu-latest
+    needs:
+      - python-quality
+      - validate-kubernetes
+      - build-images
+      - dbt-checks
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish all app images
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_REPO="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+          REPOSITORY_LOWER=$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')
+          while IFS= read -r dockerfile; do
+            app_dir=$(dirname "${dockerfile}")
+            app_name=$(basename "${app_dir}")
+            image_ref="ghcr.io/${REPOSITORY_LOWER}/${app_name}"
+            echo "Publishing ${image_ref}"
+            docker buildx build \
+              --push \
+              --build-arg SOURCE_REPO="${SOURCE_REPO}" \
+              --tag "${image_ref}:${GITHUB_SHA}" \
+              --tag "${image_ref}:latest" \
+              "${app_dir}"
+          done < <(find apps -type f -name 'Dockerfile' | sort)
