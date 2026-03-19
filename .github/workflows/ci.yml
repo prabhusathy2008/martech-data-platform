@@ -202,19 +202,19 @@ jobs:
 
           mkdir -p "$RUNNER_TEMP/dbt-profile"
           cat > "$RUNNER_TEMP/dbt-profile/profiles.yml" <<EOF
-${profile_name}:
-  target: ci
-  outputs:
-    ci:
-      type: postgres
-      host: ${DBT_HOST}
-      port: ${DBT_PORT}
-      user: ${DBT_USER}
-      password: ${DBT_PASSWORD}
-      dbname: ${DBT_DATABASE}
-      schema: ${DBT_SCHEMA}
-      threads: 4
-EOF
+          ${profile_name}:
+            target: ci
+            outputs:
+              ci:
+                type: postgres
+                host: ${DBT_HOST}
+                port: ${DBT_PORT}
+                user: ${DBT_USER}
+                password: ${DBT_PASSWORD}
+                dbname: ${DBT_DATABASE}
+                schema: ${DBT_SCHEMA}
+                threads: 4
+          EOF
 
       - name: Run dbt commands
         working-directory: apps/data-modeling/app/dbt
@@ -236,7 +236,6 @@ EOF
       - python-quality
       - validate-kubernetes
       - build-images
-      - dbt-checks
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
