@@ -83,6 +83,14 @@ jobs:
             | tar -xz kubeconform
           sudo mv kubeconform /usr/local/bin/kubeconform
 
+      - name: Setup secret files from templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp platform/k8s/airflow/airflow-secret.env.example platform/k8s/airflow/airflow-secret.env
+          cp platform/k8s/data-platform/minio/minio-secret.env.example platform/k8s/data-platform/minio/minio-secret.env
+          cp platform/k8s/data-platform/postgres/postgres-secret.env.example platform/k8s/data-platform/postgres/postgres-secret.env
+
       - name: Validate Kubernetes manifests
         shell: bash
         run: |
