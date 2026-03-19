@@ -114,9 +114,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          TRIVY_VERSION="0.58.2"
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-            | sh -s -- -b /usr/local/bin "v${TRIVY_VERSION}"
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
           trivy --version
 
       - name: Build and scan all app images

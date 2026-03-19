@@ -7,6 +7,8 @@ secretGenerator:
     namespace: airflow
     envs:
       - airflow-secret.env
+    options:
+      disableNameSuffixHash: true
 resources:
   - airflow-namespace.yaml
   - airflow-serviceaccount.yaml
