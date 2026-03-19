@@ -214,6 +214,13 @@ jobs:
                 threads: 4
           EOF
 
+      - name: Bootstrap raw schema and tables
+        env:
+          PGPASSWORD: ${{ env.DBT_PASSWORD }}
+        run: |
+          psql -h ${DBT_HOST} -p ${DBT_PORT} -U ${DBT_USER} -d ${DBT_DATABASE} \
+            -f apps/dwh-loader/app/sql/raw_raw_events.sql
+
       - name: Run dbt commands
         working-directory: apps/data-modeling/app/dbt
         env:
@@ -230,10 +237,14 @@ jobs:
     name: Publish images to GHCR
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || true
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     needs:
       - python-quality
       - validate-kubernetes
       - build-images
+      - dbt-checks
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
