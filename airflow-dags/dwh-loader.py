@@ -5,10 +5,12 @@ from airflow import DAG
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
 from kubernetes.client import models as k8s
 
+# Warehouse loading is decoupled from ingestion to isolate retry domains and runtime profiles.
 with DAG(
     dag_id="dwh-loader",
     description="Load GitHub events from MinIO raw bucket into Postgres (data warehouse)",
     start_date=pendulum.datetime(2026, 1, 1, tz="UTC"),
+    # Demo mode: manual trigger for controlled execution order.
     # schedule="@daily",
     schedule=None,
     catchup=False,

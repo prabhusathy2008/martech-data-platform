@@ -88,6 +88,7 @@ def build_s3_client(settings: Settings) -> BaseClient:
 
 
 def load_checkpoint(s3: BaseClient, settings: Settings) -> set[str]:
+    # File-level checkpointing keeps this loader rerunnable and incrementally safe.
     try:
         response = s3.get_object(
             Bucket=settings.operational_bucket, Key=settings.checkpoint_key
@@ -105,6 +106,7 @@ def load_checkpoint(s3: BaseClient, settings: Settings) -> set[str]:
 def save_checkpoint(
     s3: BaseClient, settings: Settings, processed_files: set[str]
 ) -> None:
+    # Store a deterministic, sorted list to keep checkpoint diffs stable and auditable.
     payload = {
         "processed_files": sorted(processed_files),
         "updated_at": datetime.now(UTC).isoformat(),
@@ -138,6 +140,7 @@ def _ddl_sql() -> str:
 
 
 def ensure_raw_table(conn: psycopg.Connection) -> None:
+    # DDL is idempotent by design; safe to execute on every run.
     with conn.cursor() as cursor:
         cursor.execute(_ddl_sql())
     conn.commit()
@@ -195,6 +198,7 @@ def upsert_events(
             )
             inserted += 1
 
+            # Commit once per object to balance durability and throughput.
     conn.commit()
     return inserted
 
@@ -274,6 +278,7 @@ def run() -> None:
             loaded = upsert_events(conn, events, key)
             total_events += loaded
             processed_files.add(key)
+            # Checkpoint each successfully loaded object to minimize replay scope on failure.
             save_checkpoint(s3, settings, processed_files)
             logger.info(
                 f"dwh-loader.file_loaded. event_count={loaded}",

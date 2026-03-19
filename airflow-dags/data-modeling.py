@@ -5,10 +5,12 @@ from airflow import DAG
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
 from kubernetes.client import models as k8s
 
+# Modeling is isolated as its own DAG so warehouse load and dbt runtime can evolve independently.
 with DAG(
     dag_id="data-modeling",
     description="Run dbt models to transform raw GitHub events into user engagement metrics",
     start_date=pendulum.datetime(2026, 1, 1, tz="UTC"),
+    # Demo mode: triggered manually after dwh-loader success.
     # schedule="@daily",
     schedule=None,
     catchup=False,

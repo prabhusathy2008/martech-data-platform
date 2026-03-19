@@ -144,6 +144,7 @@ def write_events_to_raw(
 
 
 def _build_retrying_session() -> requests.Session:
+    # Retry policy covers transient API/network errors and respects Retry-After.
     retry = Retry(
         total=5,
         connect=5,
@@ -244,6 +245,7 @@ def fetch_new_events(
             done = False
             for event in events:
                 event_id = int(str(event["id"]))
+                # Stop once we hit already-processed territory (API returns newest -> oldest).
                 if watermark is not None and event_id <= watermark:
                     done = True
                     break

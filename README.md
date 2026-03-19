@@ -1,126 +1,166 @@
-# MarTech Data Platform (Assignment Scaffold)
+# MarTech Data Platform
 
-This repository is structured for a local, reproducible MarTech data platform on kind + Kubernetes.
+This README explains how to set up and run the End-to-End Audience pipeline project on a local machine, step by step.
 
-## Project layout
+For architecture and design decisions, see [docs/design.md](docs/design.md).
 
-- `infra`: local cluster/bootstrap configs (e.g., kind config)
-- `platform/k8s/kustomization.yaml`: single kustomize entrypoint
-- `platform/k8s/data-platform`: namespace, MinIO, and PostgreSQL manifests
-- `platform/k8s/airflow`: namespace, service account, deployment, and service manifests
-- `platform/k8s/airflow-data-platform-binding.yaml`: cross-namespace Role + RoleBinding for Airflow task pods
-- `airflow-dags`: local DAGs folder mounted into Airflow at `/opt/airflow/dags`
-- `apps`: application modules (dl-ingestion, dwh-load, data-modeling)
-- `data/sql`: schema and seed scripts
-- `docs`: architecture notes and runbook
-- `tests`: smoke/integration tests (next step)
+## 1. What this project does
 
-## Quick start
+This project builds a small end-to-end data platform that:
 
-From repository root:
+1. extracts GitHub engagement events,
+2. stores raw files in MinIO,
+3. loads raw events into PostgreSQL,
+4. transforms the data with dbt,
+5. creates analytics-ready tables and audience tables.
 
-1. Create the kind cluster
-	- `kind create cluster --name martech-local --config infra/kind-local.yaml`
+Main modeled outputs:
+- `dim_users`
+- `dim_repos`
+- `dim_event_types`
+- `fct_user_repo_engagement`
+- `aud_high_intent_users`
+- `aud_newly_engaged_users`
 
-2. Create local credential files from the provided examples and edit with real values
-	```bash
-	cp platform/k8s/data-platform/minio/minio-secret.env.example platform/k8s/data-platform/minio/minio-secret.env
-	cp platform/k8s/data-platform/postgres/postgres-secret.env.example platform/k8s/data-platform/postgres/postgres-secret.env
-	cp platform/k8s/airflow/airflow-secret.env.example platform/k8s/airflow/airflow-secret.env
-	# Then edit each file and set your own values
-	```
+## 2. High-level flow
 
-3. Deploy platform resources
-	- `kubectl apply -k platform/k8s`
+```text
+GitHub API -> dl-ingestion -> MinIO raw bucket
+MinIO raw bucket -> dwh-loader -> PostgreSQL raw.raw_events
+PostgreSQL raw.raw_events -> dbt -> dimensions / facts / audiences
+```
 
-4. Verify deployment
-	- `kubectl get pods -n data-platform`
-	- `kubectl get pods -n airflow`
-    - `kubectl get pods --all-namespaces | grep -E "data-platform|airflow"`
-	- `kubectl get svc -n data-platform`
-    - `kubectl get svc --all-namespaces | grep -E "data-platform|airflow"`
+## 3. Prerequisites
 
-### Local access
+Install the following before starting:
+
+- Docker Desktop or Docker Engine
+- kind
+- kubectl
+- Python 3.11+
+- `psql` client (recommended)
+
+## 4. Clone the repository
+
+```bash
+git clone https://github.com/prabhusathy2008/martech-data-platform.git
+cd martech-data-platform
+```
+
+## 5. Create local secret files
+
+Copy the example files:
+
+```bash
+cp platform/k8s/data-platform/minio/minio-secret.env.example platform/k8s/data-platform/minio/minio-secret.env
+cp platform/k8s/data-platform/postgres/postgres-secret.env.example platform/k8s/data-platform/postgres/postgres-secret.env
+cp platform/k8s/airflow/airflow-secret.env.example platform/k8s/airflow/airflow-secret.env
+```
+
+Update the credentials in each copied env file as needed.
+
+## 6. Create the local Kubernetes cluster
+
+```bash
+kind create cluster --name martech-local --config infra/kind-local.yaml
+```
+
+Verify cluster access:
+
+```bash
+kubectl cluster-info --context kind-martech-local
+```
+
+## 7. Deploy platform components
+
+Apply all manifests:
+
+```bash
+kubectl apply -k platform/k8s
+```
+
+Check pod status:
+
+```bash
+kubectl get pods -n data-platform
+kubectl get pods -n airflow
+```
+
+If needed, wait until all pods are ready:
+
+```bash
+kubectl get pods -n data-platform -w
+```
+
+## 8. Verify services and local endpoints
+
+Check services:
+
+```bash
+kubectl get svc -n data-platform
+kubectl get svc -n airflow
+```
+
+Expected endpoints:
 
 - MinIO API: http://localhost:9000
 - MinIO Console: http://localhost:9001
 - PostgreSQL: localhost:5432
 - Airflow UI: http://localhost:8080
 
-### Cleanup
+## 9. Run the pipeline from the Airflow UI
 
-- `kubectl delete namespace data-platform`
-- `kubectl delete namespace airflow`
-- `kind delete cluster --name martech-local`
+The project includes Airflow DAGs that you will trigger manually in this local setup. In production, these DAGs would run on a schedule.
 
-## dl-ingestion local run
-export MINIO_ACCESS_KEY=admin
-export MINIO_SECRET_KEY=[password]
-python3 app/main.py
+Open the Airflow UI at http://localhost:8080 and log in with the credentials from [platform/k8s/airflow/airflow-secret.env](platform/k8s/airflow/airflow-secret.env).
 
-## dl-inegstion push command
-export REPO_URL=$(git config --get remote.origin.url)
-export OWNER_REPO=$(echo "$REPO_URL" | sed -E 's#(git@github.com:|https://github.com/)##; s#\.git$##')
-export SOURCE_REPO=https://github.com/$OWNER_REPO
-export GHCR_OWNER=${OWNER_REPO%%/*}
-export GHCR_REPO=${OWNER_REPO##*/}
-export IMAGE=ghcr.io/$GHCR_OWNER/$GHCR_REPO/dl-ingestion
-export TAG=v1
+Run the DAGs in this order:
 
-docker build --build-arg SOURCE_REPO=$SOURCE_REPO -t $IMAGE:$TAG ./apps/dl-ingestion
-docker push $IMAGE:$TAG
+1. `dl-ingestion` - pulls source events and writes raw files into MinIO.
+2. `dwh-loader` - reads raw files from MinIO and loads them into PostgreSQL `raw.raw_events`.
+3. `data-modeling` - runs the modeling pipeline and builds staging, intermediate, mart, and audience models.
 
-## dl-ingestion run in k8s
-kubectl delete job -n data-platform dl-ingestion-manual --ignore-not-found
-kubectl apply -f apps/dl-ingestion/dl-ingestion-job.yaml
-kubectl logs -n data-platform -f job/dl-ingestion-manual
+For each DAG:
+- open the DAG in Airflow,
+- click Trigger DAG,
+- wait until the DAG run finishes successfully,
+- only then trigger the next DAG,
+- review task logs if any task fails.
 
-## dwh-loader local run
-export MINIO_ACCESS_KEY=admin
-export MINIO_SECRET_KEY=[password]
-export POSTGRES_USER=admin
-export POSTGRES_PASSWORD=[password]
-python3 app/main.py
+## 10. Explore analytics data
 
-## dwh-loader push command
-export REPO_URL=$(git config --get remote.origin.url)
-export OWNER_REPO=$(echo "$REPO_URL" | sed -E 's#(git@github.com:|https://github.com/)##; s#\.git$##')
-export SOURCE_REPO=https://github.com/$OWNER_REPO
-export GHCR_OWNER=${OWNER_REPO%%/*}
-export GHCR_REPO=${OWNER_REPO##*/}
-export IMAGE=ghcr.io/$GHCR_OWNER/$GHCR_REPO/dwh-loader
-export TAG=v1
+After the pipeline run is complete, use the business SQL queries in [docs/analytics-business-queries.sql](docs/analytics-business-queries.sql) to explore:
 
-docker build --build-arg SOURCE_REPO=$SOURCE_REPO -t $IMAGE:$TAG ./apps/dwh-loader
-docker push $IMAGE:$TAG
+- top engaged users
+- most engaged repositories
+- event type quality mix
+- daily engagement trends
+- audience composition and overlap
 
-## dwh-loader run in k8s
-kubectl delete job -n data-platform dwh-loader-manual --ignore-not-found
-kubectl apply -f apps/dwh-loader/dwh-loader-job.yaml
-kubectl logs -n data-platform -f job/dwh-loader-manual
+Example:
 
-## data-modeling local run
-python3.11 -m venv .venv
-source .venv/bin/activate
+```bash
+psql -h localhost -p 5432 -U <POSTGRES_USER> -d <POSTGRES_DB> -f docs/analytics-business-queries.sql
+```
 
-export POSTGRES_USER=admin
-export POSTGRES_PASSWORD=[password]
-./run_dbt.sh
+## 11. Cleanup
 
-## dwh-loader push command
-export REPO_URL=$(git config --get remote.origin.url)
-export OWNER_REPO=$(echo "$REPO_URL" | sed -E 's#(git@github.com:|https://github.com/)##; s#\.git$##')
-export SOURCE_REPO=https://github.com/$OWNER_REPO
-export GHCR_OWNER=${OWNER_REPO%%/*}
-export GHCR_REPO=${OWNER_REPO##*/}
-export IMAGE=ghcr.io/$GHCR_OWNER/$GHCR_REPO/data-modeling
-export TAG=v1
+Delete namespaces:
 
-docker build --build-arg SOURCE_REPO=$SOURCE_REPO -t $IMAGE:$TAG ./apps/data-modeling
-docker push $IMAGE:$TAG
+```bash
+kubectl delete namespace data-platform
+kubectl delete namespace airflow
+```
 
-## data-modeling run in k8s
-kubectl delete job -n data-platform data-modeling-manual --ignore-not-found
-kubectl apply -f apps/data-modeling/data-modeling-job.yaml
-kubectl logs -n data-platform -f job/data-modeling-manual
+Delete the kind cluster:
+
+```bash
+kind delete cluster --name martech-local
+```
+
+## Additional documentation
+
+- [docs/design.md](docs/design.md)
+- [docs/runbook.md](docs/runbook.md)
+- [docs/audience-logic.md](docs/audience-logic.md)
 

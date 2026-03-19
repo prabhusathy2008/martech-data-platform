@@ -5,10 +5,13 @@ from airflow import DAG
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
 from kubernetes.client import models as k8s
 
+# This DAG is intentionally single-task and container-driven:
+# orchestration concerns stay in Airflow, transformation/ingestion logic stays in the image.
 with DAG(
     dag_id="dl-ingestion",
     description="Ingest GitHub events into MinIO raw bucket (data lake)",
     start_date=pendulum.datetime(2026, 1, 1, tz="UTC"),
+    # Demo mode: manual trigger for deterministic walkthroughs.
     # schedule="@hourly",
     schedule=None,
     catchup=False,

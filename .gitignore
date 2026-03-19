@@ -43,4 +43,6 @@ logs/
 target/
 .user.yml
 
-#ci.yml
+Notes.txt
+audience-logic.md
+runbook.md
