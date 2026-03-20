@@ -107,6 +107,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -272,6 +275,7 @@ jobs:
             echo "Publishing ${image_ref}"
             docker buildx build \
               --push \
+              --platform linux/amd64,linux/arm64 \
               --label "org.opencontainers.image.source=${SOURCE_REPO}" \
               --build-arg SOURCE_REPO="${SOURCE_REPO}" \
               --tag "${image_ref}:v1" \
