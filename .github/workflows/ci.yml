@@ -274,7 +274,7 @@ jobs:
               --push \
               --label "org.opencontainers.image.source=${SOURCE_REPO}" \
               --build-arg SOURCE_REPO="${SOURCE_REPO}" \
-              --tag "${image_ref}:${GITHUB_SHA}" \
+              --tag "${image_ref}:v1" \
               --tag "${image_ref}:latest" \
               "${app_dir}"
           done < <(find apps -type f -name 'Dockerfile' | sort)
