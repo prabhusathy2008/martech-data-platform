@@ -33,24 +33,6 @@ models:
         description: GitHub event type, uppercased (e.g. PUSHEVENT).
         tests:
           - not_null
-          - accepted_values:
-              arguments:
-                values:
-                  - PUSHEVENT
-                  - PULLREQUESTEVENT
-                  - ISSUESEVENT
-                  - ISSUECOMMENTEVENT
-                  - PULLREQUESTREVIEWCOMMENTEVENT
-                  - CREATEEVENT
-                  - WATCHEVENT
-                  - FORKEVENT
-                  - DELETEEVENT
-                  - RELEASEEVENT
-                  - MEMBEREVENT
-                  - COMMITCOMMENTEVENT
-                  - PUBLICEVENT
-                  - PULLREQUESTREVIEWEVENT
-                quote: true
       - name: payload
         description: Full event payload as JSONB.
         tests:

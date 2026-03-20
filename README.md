@@ -102,7 +102,7 @@ Open the Airflow UI at http://localhost:8080 and log in with the credentials fro
 
 Run the DAGs in this order (wait for each DAG run to succeed before triggering the next):
 
-1. `dl-ingestion` - pulls source events and writes raw files into MinIO.
+1. `dl-ingestion` - pulls source events and writes raw files into MinIO (this can take some time because the job may wait between API requests).
 2. `dwh-loader` - reads raw files from MinIO and loads them into PostgreSQL `raw.raw_events`.
 3. `data-modeling` - runs the modeling pipeline and builds staging, intermediate, mart, and audience models.
 

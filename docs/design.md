@@ -40,11 +40,11 @@ Purpose:
 - Land it in MinIO without transforming the source payload.
 
 Behavior:
+- No GitHub API authentication is required for the demo path (unauthenticated requests).
+- A GitHub personal access token (`GITHUB_TOKEN`) can still be provided, and the ingestion code supports authenticated API requests.
 - Writes raw files to the `dl-raw-events` bucket.
 - Uses checkpointing to support incremental progress.
 - Intended production cadence: hourly.
-- No authentication is required for the demo path.
-- A token can still be provided, and the ingestion code supports that option.
 
 Ingestion strategy:
 - The GitHub events API only returns the most recent 300 events.
