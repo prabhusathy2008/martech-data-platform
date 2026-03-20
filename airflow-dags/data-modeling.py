@@ -29,7 +29,7 @@ with DAG(
         service_account_name="airflow-task-runner",
         startup_timeout_seconds=300,
         log_events_on_failure=True,
-        retries=2,
+        retries=0,
         retry_delay=pendulum.duration(minutes=5),
         env_vars=[
             k8s.V1EnvVar(name="POSTGRES_PORT", value="5432"),
