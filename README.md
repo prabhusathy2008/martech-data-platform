@@ -1,8 +1,8 @@
 # MarTech Data Platform
 
-This README explains how to set up and run the End-to-End Audience pipeline project on a local machine, step by step.
+This README explains how to set up and run the full MarTech data platform project on a local machine, step by step.
 
-For architecture and design decisions, see [docs/design.md](docs/design.md).
+For architecture and design decisions, see [docs/design.md](docs/design.md)
 
 ## 1. What this project does
 
@@ -13,14 +13,6 @@ This project builds a small end-to-end data platform that:
 3. loads raw events into PostgreSQL,
 4. transforms the data with dbt,
 5. creates analytics-ready tables and audience tables.
-
-Main modeled outputs:
-- `dim_users`
-- `dim_repos`
-- `dim_event_types`
-- `fct_user_repo_engagement`
-- `aud_high_intent_users`
-- `aud_newly_engaged_users`
 
 ## 2. High-level flow
 
@@ -38,7 +30,7 @@ Install the following before starting:
 - kind
 - kubectl
 - Python 3.11+
-- `psql` client (recommended)
+- A PostgreSQL-compatible database client (for example, DBeaver, TablePlus, or psql) to explore final data in mart tables
 
 ## 4. Clone the repository
 
@@ -49,15 +41,13 @@ cd martech-data-platform
 
 ## 5. Create local secret files
 
-Copy the example files:
+Copy each secret template, create the main secret files, and edit the credentials:
 
 ```bash
 cp platform/k8s/data-platform/minio/minio-secret.env.example platform/k8s/data-platform/minio/minio-secret.env
 cp platform/k8s/data-platform/postgres/postgres-secret.env.example platform/k8s/data-platform/postgres/postgres-secret.env
 cp platform/k8s/airflow/airflow-secret.env.example platform/k8s/airflow/airflow-secret.env
 ```
-
-Update the credentials in each copied env file as needed.
 
 ## 6. Create the local Kubernetes cluster
 
@@ -86,11 +76,7 @@ kubectl get pods -n data-platform
 kubectl get pods -n airflow
 ```
 
-If needed, wait until all pods are ready:
-
-```bash
-kubectl get pods -n data-platform -w
-```
+If needed, wait until all pods are ready before continuing.
 
 ## 8. Verify services and local endpoints
 
@@ -101,7 +87,7 @@ kubectl get svc -n data-platform
 kubectl get svc -n airflow
 ```
 
-Expected endpoints:
+This will generate the following endpoints:
 
 - MinIO API: http://localhost:9000
 - MinIO Console: http://localhost:9001
@@ -114,34 +100,17 @@ The project includes Airflow DAGs that you will trigger manually in this local s
 
 Open the Airflow UI at http://localhost:8080 and log in with the credentials from [platform/k8s/airflow/airflow-secret.env](platform/k8s/airflow/airflow-secret.env).
 
-Run the DAGs in this order:
+Run the DAGs in this order (wait for each DAG run to succeed before triggering the next):
 
 1. `dl-ingestion` - pulls source events and writes raw files into MinIO.
 2. `dwh-loader` - reads raw files from MinIO and loads them into PostgreSQL `raw.raw_events`.
 3. `data-modeling` - runs the modeling pipeline and builds staging, intermediate, mart, and audience models.
 
-For each DAG:
-- open the DAG in Airflow,
-- click Trigger DAG,
-- wait until the DAG run finishes successfully,
-- only then trigger the next DAG,
-- review task logs if any task fails.
-
 ## 10. Explore analytics data
 
-After the pipeline run is complete, use the business SQL queries in [docs/analytics-business-queries.sql](docs/analytics-business-queries.sql) to explore:
+After the pipeline run is complete, connect to PostgreSQL using your preferred DB client and explore the modeled mart outputs.
 
-- top engaged users
-- most engaged repositories
-- event type quality mix
-- daily engagement trends
-- audience composition and overlap
-
-Example:
-
-```bash
-psql -h localhost -p 5432 -U <POSTGRES_USER> -d <POSTGRES_DB> -f docs/analytics-business-queries.sql
-```
+You can use the example business queries in [docs/analytics-business-queries.sql](docs/analytics-business-queries.sql) as a starting point.
 
 ## 11. Cleanup
 
@@ -162,5 +131,5 @@ kind delete cluster --name martech-local
 
 - [docs/design.md](docs/design.md)
 - [docs/runbook.md](docs/runbook.md)
-- [docs/audience-logic.md](docs/audience-logic.md)
-
+- [docs/data-flow-and-env-vars.md](docs/data-flow-and-env-vars.md)
+- [docs/analytics-business-queries.sql](docs/analytics-business-queries.sql)

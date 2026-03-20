@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-This project implements a small end-to-end data platform for GitHub engagement analytics and audience creation. The pipeline ingests raw events from Adevinta's GitHub organization, stores them in object storage, loads them into a warehouse, and transforms them into analytics-ready dimension, fact, and audience tables.
+This project implements a small end-to-end MarTech data platform for GitHub engagement analytics and audience creation. The pipeline ingests raw events from Adevinta's GitHub organization, stores them in object storage, loads them into a warehouse, and transforms them into analytics-ready dimensional, fact, and audience tables.
 
 The design is intentionally modular so that ingestion, warehouse loading, and transformation can run independently, scale independently, and be orchestrated independently.
 
@@ -10,9 +10,7 @@ The design is intentionally modular so that ingestion, warehouse loading, and tr
 
 ![Architecture diagram](design.svg)
 
-Project repository and container source:
-
-- GHCR source repository: https://github.com/prabhusathy2008/martech-data-platform
+Project repository and container images: https://github.com/prabhusathy2008/martech-data-platform
 
 At a high level, the platform follows this flow:
 
@@ -22,30 +20,14 @@ At a high level, the platform follows this flow:
 4. `data-modeling` runs dbt models to build staging, intermediate, mart, and audience outputs.
 5. Airflow orchestrates the modules as separate DAGs.
 
-## 3. Source System and Ingestion Strategy
+## 3. Source System
 
-The source system is the GitHub Public API for events from Adevinta's GitHub organization.
+The source system is the GitHub Public API for events from the Adevinta GitHub organization.
 
 Source details:
 
 - Endpoint reference: https://docs.github.com/en/rest/activity/events?apiVersion=2026-03-10
 - Source organization: https://github.com/adevinta
-
-Key ingestion decisions:
-
-- No authentication is required for the demo path.
-- A token can still be provided, and the ingestion code supports that option.
-- The GitHub events API only returns the most recent 300 events.
-- Because event traffic can be high, `dl-ingestion` is designed to run hourly in production.
-
-The ingestion job stores the source data in its raw format as NDJSON files partitioned by:
-
-- year
-- month
-- day
-- hour
-
-This partitioning keeps the landing zone simple, supports replay by time window, and reduces the amount of data scanned by downstream jobs.
 
 ## 4. Application Modules
 
@@ -61,6 +43,14 @@ Behavior:
 - Writes raw files to the `dl-raw-events` bucket.
 - Uses checkpointing to support incremental progress.
 - Intended production cadence: hourly.
+- No authentication is required for the demo path.
+- A token can still be provided, and the ingestion code supports that option.
+
+Ingestion strategy:
+- The GitHub events API only returns the most recent 300 events.
+- Because event traffic can be high, `dl-ingestion` is designed to run hourly in production.
+- The ingestion job stores source data in raw NDJSON files partitioned by year/month/day/hour.
+- This partitioning keeps the landing zone simple, supports replay by time window, and reduces downstream scan size.
 
 Why hourly:
 - The source API exposes only a limited recent-event window.
@@ -86,6 +76,8 @@ Behavior:
 - Runs dbt models over PostgreSQL.
 - Builds dimension, fact, and audience tables.
 - Intended production cadence: daily.
+
+For module-level data flow and environment-variable controls, see [docs/data-flow-and-env-vars.md](data-flow-and-env-vars.md).
 
 ## 5. Storage and Incremental State
 
@@ -136,7 +128,7 @@ Representative outputs include:
 - `aud_high_intent_users`
 - `aud_newly_engaged_users`
 
-An additional model structure artifact is planned separately and can be documented later when the referenced HTML output is added to the repository.
+For full table lineage and environment-variable mapping, see [docs/data-flow-and-env-vars.md](data-flow-and-env-vars.md).
 
 ## 7. Orchestration Approach
 
@@ -220,12 +212,3 @@ The main design decisions behind this platform are:
 
 5. **Airflow orchestration with environment-driven containers**  
    This keeps scheduling concerns separate from business logic and makes deployments easier to operate.
-
-## 13. Future Enhancements
-
-Potential next improvements include:
-
-- enabling production schedules in Airflow
-- expanding model documentation artifacts
-- strengthening observability around checkpoints and load progress
-- moving from local-demo infrastructure to a multi-environment deployment model

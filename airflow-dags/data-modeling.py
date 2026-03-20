@@ -32,6 +32,7 @@ with DAG(
         retries=2,
         retry_delay=pendulum.duration(minutes=5),
         env_vars=[
+            k8s.V1EnvVar(name="POSTGRES_PORT", value="5432"),
             k8s.V1EnvVar(
                 name="POSTGRES_USER",
                 value_from=k8s.V1EnvVarSource(
